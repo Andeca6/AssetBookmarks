@@ -154,6 +154,24 @@ namespace Andeca.AssetBookmarks
             Commit();
         }
 
+        // An empty note clears it.
+        public void SetNote(string groupKey, string id, string note)
+        {
+            var bookmarks = GetBookmarks(groupKey);
+            var index = bookmarks == null ? -1 : IndexOf(bookmarks, id);
+            if (index < 0)
+                return;
+
+            note = NormalizeNote(note);
+            var bookmark = bookmarks[index];
+            if (bookmark.Note == note)
+                return;
+
+            Undo.RecordObject(this, note.Length == 0 ? "Clear Bookmark Note" : "Edit Bookmark Note");
+            bookmark.Note = note;
+            Commit();
+        }
+
         // Display names are a cache of the target's current name rather than user intent, so they are
         // refreshed without an undo step or change notification; renames shouldn't flood the undo history.
         public void UpdateDisplayName(Bookmark bookmark, string displayName)
@@ -199,6 +217,16 @@ namespace Andeca.AssetBookmarks
 
             globalId = GlobalObjectId.GetGlobalObjectIdSlow(obj);
             return globalId.identifierType == NullIdentifierType ? AddRejection.Unsupported : AddRejection.None;
+        }
+
+        private static string NormalizeNote(string note)
+        {
+            if (string.IsNullOrWhiteSpace(note))
+                return string.Empty;
+
+            // Pasted text can carry line breaks, which a single-line row can't show.
+            note = note.Replace("\r\n", " ").Replace('\r', ' ').Replace('\n', ' ').Trim();
+            return note.Length > Bookmark.MaxNoteLength ? note.Substring(0, Bookmark.MaxNoteLength).TrimEnd() : note;
         }
 
         private void OnUndoRedo()

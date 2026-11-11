@@ -15,7 +15,9 @@ however deep they sit in the Project window or the Hierarchy.
   opens in your IDE, a GameObject is framed in the Scene view.
 - **Drag out as a reference:** drag a bookmark into any object field, the Scene view or the Hierarchy,
   exactly as if you were dragging the original item.
-- **Reorder** by dragging within a group, and **filter** by name from the toolbar.
+- **Notes:** add a short note to any bookmark when its name isn't enough, such as two objects both
+  called `Flipper_L`. Notes show next to the name and are included in the filter.
+- **Reorder** by dragging within a group, and **filter** by name or note from the toolbar.
 - **Undo support** for adding, removing, reordering and clearing.
 - **Clear feedback:** missing items keep their last known name, so you can tell what was deleted.
 
@@ -44,6 +46,7 @@ Open the window from **Tools > Asset Bookmarks**.
 | Select and ping | Click a bookmark. |
 | Open | Double-click a bookmark, or right-click it and choose **Open**. |
 | Use as a reference | Drag a bookmark onto an object field, the Scene view or the Hierarchy. |
+| Add or edit a note | Select a bookmark and press **F2** (**Return** on macOS), or right-click it and choose **Edit Note...**. Press **Enter** to save or **Esc** to cancel. Notes are limited to 64 characters. |
 | Reorder | Drag a bookmark up or down within its group. |
 | Remove | Select a bookmark and press **Delete**, or right-click it and choose **Remove**. |
 | Open a scene that isn't loaded | Right-click its group header or one of its bookmarks and choose **Open Scene** or **Open Scene Additive**. |

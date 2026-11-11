@@ -22,10 +22,12 @@ namespace Andeca.AssetBookmarks
     // the AssetDatabase or the (slow) GlobalObjectId lookups.
     internal sealed class BookmarkRow
     {
-        public BookmarkRow(string id, GUIContent content, Texture icon, Object target, BookmarkRowState state)
+        public BookmarkRow(string id, GUIContent content, GUIContent noteContent, Texture icon, Object target,
+            BookmarkRowState state)
         {
             Id = id;
             Content = content;
+            NoteContent = noteContent;
             Icon = icon;
             Target = target;
             State = state;
@@ -33,6 +35,9 @@ namespace Andeca.AssetBookmarks
 
         public string Id { get; }
         public GUIContent Content { get; }
+        // Null when the bookmark has no note.
+        public GUIContent NoteContent { get; }
+        public string Note => NoteContent?.text ?? string.Empty;
         public Texture Icon { get; }
         public Object Target { get; }
         public BookmarkRowState State { get; }

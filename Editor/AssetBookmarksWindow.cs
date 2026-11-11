@@ -12,9 +12,13 @@ namespace Andeca.AssetBookmarks
     public sealed class AssetBookmarksWindow : EditorWindow, IHasCustomMenu
     {
         private const string DragDataKey = "Andeca.AssetBookmarks.DraggedRow";
+        private const string NoteControlName = "Andeca.AssetBookmarks.NoteField";
         private const float RowHeight = 18f;
         private const float RowIndent = 14f;
         private const float IconSize = 16f;
+        private const float NoteSpacing = 6f;
+        // The note field never shrinks below this share of the row, however long the name is.
+        private const float MinNoteFieldFraction = 0.4f;
         private const float DragStartDistance = 4f;
         private const double NotificationSeconds = 2.5;
 
@@ -31,6 +35,7 @@ namespace Andeca.AssetBookmarks
 
         private SearchField _searchField;
         private GUIStyle _missingLabelStyle;
+        private GUIStyle _noteLabelStyle;
         private bool _rebuildQueued = true;
         private bool _visibleGroupsDirty = true;
         private bool _hasLoadedSceneGroups;
@@ -39,8 +44,14 @@ namespace Andeca.AssetBookmarks
         private Vector2 _pressPosition;
         private string _dropGroupKey;
         private float _dropLineY;
+        private RowKey _editingRow;
+        private string _editingText;
+        private bool _focusNoteField;
+        // Read from the last Repaint: on KeyDown the field hasn't been drawn yet, so its name isn't registered.
+        private bool _noteFieldFocused;
 
         private bool IsFiltering => !string.IsNullOrEmpty(_visibleFilter);
+        private bool IsEditingNote => _editingRow.IsValid;
 
         [MenuItem("Tools/Asset Bookmarks")]
         public static void Open()
@@ -93,6 +104,22 @@ namespace Andeca.AssetBookmarks
 
         private void OnSelectionChange() => Repaint();
 
+        // Like a rename in the Hierarchy, switching to another window keeps what was typed. Skipped while the
+        // field is still waiting for focus: closing the context menu that started the edit can land here first.
+        private void OnLostFocus()
+        {
+            if (!IsEditingNote || _focusNoteField)
+                return;
+
+            var fieldHadFocus = _noteFieldFocused;
+            CommitNoteEdit();
+
+            // The field is no longer drawn, so nothing else would end its editing state, which is global and
+            // makes other windows ignore their shortcuts.
+            if (fieldHadFocus)
+                EditorGUIUtility.editingTextField = false;
+        }
+
         private void OnSceneOpened(Scene scene, OpenSceneMode mode) => QueueRebuild();
         private void OnSceneClosed(Scene scene) => QueueRebuild();
         private void OnPlayModeStateChanged(PlayModeStateChange change) => QueueRebuild();
@@ -140,6 +167,11 @@ namespace Andeca.AssetBookmarks
                 if (_visibleGroupsDirty)
                     RefreshVisibleGroups();
             }
+            else if (e.type == EventType.Repaint)
+            {
+                // Recomputed when the field is drawn; stays false if its row is hidden.
+                _noteFieldFocused = false;
+            }
 
             DrawToolbar();
 
@@ -162,11 +194,16 @@ namespace Andeca.AssetBookmarks
 
             HandleWindowDragAndDrop(e);
             HandleDeleteCommand(e);
+            HandleNoteShortcut(e);
+            EndNoteEditOnFocusLoss(e);
         }
 
         private void Rebuild()
         {
             BookmarkGroupBuilder.Build(BookmarkStore.instance, _groups);
+
+            if (IsEditingNote && FindRow(_editingRow) == null)
+                CancelNoteEdit();
 
             _hasLoadedSceneGroups = _groups.Exists(group => group.Kind == BookmarkGroupKind.LoadedScene);
             _toggledGroups.RemoveAll(key => !_groups.Exists(group => group.Key == key));
@@ -189,7 +226,8 @@ namespace Andeca.AssetBookmarks
                 }
 
                 var matches = group.Rows.FindAll(row =>
-                    row.Content.text.IndexOf(_visibleFilter, StringComparison.OrdinalIgnoreCase) >= 0);
+                    row.Content.text.IndexOf(_visibleFilter, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    row.Note.IndexOf(_visibleFilter, StringComparison.OrdinalIgnoreCase) >= 0);
                 if (matches.Count > 0)
                     _visibleGroups.Add(new VisibleGroup(group, matches, expanded: true, canReorder: false));
             }
@@ -238,6 +276,9 @@ namespace Andeca.AssetBookmarks
 
         private void ToggleGroup(string key)
         {
+            if (IsEditingNote && _editingRow.GroupKey == key)
+                CommitNoteEdit(releaseFocus: true);
+
             if (!_toggledGroups.Remove(key))
                 _toggledGroups.Add(key);
             _visibleGroupsDirty = true;
@@ -275,9 +316,17 @@ namespace Andeca.AssetBookmarks
             var key = new RowKey(group.Key, row.Id);
             var controlId = GUIUtility.GetControlID(FocusType.Passive, rect);
 
+            if (key.Equals(_editingRow))
+            {
+                DrawNoteField(row, rect, e);
+                return;
+            }
+
             switch (e.GetTypeForControl(controlId))
             {
                 case EventType.MouseDown when e.button == 0 && rect.Contains(e.mousePosition):
+                    if (IsEditingNote)
+                        CommitNoteEdit(releaseFocus: true);
                     _selectedRow = key;
                     if (e.clickCount == 2)
                         OpenTarget(row.Target);
@@ -303,24 +352,41 @@ namespace Andeca.AssetBookmarks
                     break;
 
                 case EventType.ContextClick when rect.Contains(e.mousePosition):
+                    if (IsEditingNote)
+                        CommitNoteEdit(releaseFocus: true);
                     _selectedRow = key;
                     ShowRowMenu(group, row);
                     e.Use();
                     break;
 
                 case EventType.Repaint:
-                    PaintRow(row, rect, key.Equals(_selectedRow));
+                    PaintRow(row, rect, key.Equals(_selectedRow), editing: false);
                     break;
             }
         }
 
-        private void PaintRow(BookmarkRow row, Rect rect, bool selected)
+        // Returns the note area: after the name, or for the edit field, never narrower than its minimum share.
+        private static Rect LayoutRow(BookmarkRow row, Rect rect, bool editing, out Rect iconRect, out Rect nameRect)
+        {
+            iconRect = new Rect(rect.x + RowIndent, rect.y + (rect.height - IconSize) * 0.5f, IconSize, IconSize);
+
+            var labelX = iconRect.xMax + 4f;
+            var labelWidth = Mathf.Max(0f, rect.xMax - labelX);
+            var nameWidth = Mathf.Min(EditorStyles.label.CalcSize(row.Content).x, labelWidth);
+            if (editing)
+                nameWidth = Mathf.Clamp(nameWidth, 0f, labelWidth * (1f - MinNoteFieldFraction) - NoteSpacing);
+
+            nameRect = new Rect(labelX, rect.y, nameWidth, rect.height);
+            var noteX = nameRect.xMax + NoteSpacing;
+            return new Rect(noteX, rect.y, Mathf.Max(0f, rect.xMax - noteX - 2f), rect.height);
+        }
+
+        private void PaintRow(BookmarkRow row, Rect rect, bool selected, bool editing)
         {
             if (selected)
                 EditorGUI.DrawRect(rect, hasFocus ? Palette.SelectionFocused : Palette.SelectionUnfocused);
 
-            var iconRect = new Rect(rect.x + RowIndent, rect.y + (rect.height - IconSize) * 0.5f, IconSize, IconSize);
-            var labelRect = new Rect(iconRect.xMax + 4f, rect.y, rect.xMax - iconRect.xMax - 4f, rect.height);
+            var noteRect = LayoutRow(row, rect, editing, out var iconRect, out var nameRect);
 
             // A target destroyed since the last rebuild (e.g. in Play Mode) is drawn as missing right away.
             var state = row.State == BookmarkRowState.Available && row.Target == null
@@ -336,21 +402,163 @@ namespace Andeca.AssetBookmarks
                 GUI.color = previousColor;
             }
 
-            switch (state)
+            var nameStyle = EditorStyles.label;
+            if (state == BookmarkRowState.Missing)
             {
-                case BookmarkRowState.Missing:
-                    _missingLabelStyle ??= new GUIStyle(EditorStyles.label);
-                    _missingLabelStyle.normal.textColor = Palette.MissingText;
-                    GUI.Label(labelRect, row.Content, _missingLabelStyle);
-                    break;
-                case BookmarkRowState.Unavailable:
-                    using (new EditorGUI.DisabledScope(true))
-                        GUI.Label(labelRect, row.Content, EditorStyles.label);
-                    break;
-                default:
-                    GUI.Label(labelRect, row.Content, EditorStyles.label);
-                    break;
+                _missingLabelStyle ??= new GUIStyle(EditorStyles.label);
+                _missingLabelStyle.normal.textColor = Palette.MissingText;
+                nameStyle = _missingLabelStyle;
             }
+
+            using (new EditorGUI.DisabledScope(state == BookmarkRowState.Unavailable))
+            {
+                GUI.Label(nameRect, row.Content, nameStyle);
+
+                if (!editing && row.NoteContent != null && noteRect.width > 0f)
+                {
+                    _noteLabelStyle ??= new GUIStyle(EditorStyles.label);
+                    _noteLabelStyle.normal.textColor = Palette.NoteText;
+                    GUI.Label(noteRect, row.NoteContent, _noteLabelStyle);
+                }
+            }
+        }
+
+        private void DrawNoteField(BookmarkRow row, Rect rect, Event e)
+        {
+            // Handled before the field sees them, so EditorGUI's own Enter and Escape handling never runs.
+            if (e.type == EventType.KeyDown && _noteFieldFocused)
+            {
+                switch (e.keyCode)
+                {
+                    case KeyCode.Return:
+                    case KeyCode.KeypadEnter:
+                        CommitNoteEdit(releaseFocus: true);
+                        e.Use();
+                        return;
+                    case KeyCode.Escape:
+                        CancelNoteEdit(releaseFocus: true);
+                        e.Use();
+                        return;
+                }
+            }
+
+            if (e.type == EventType.Repaint)
+                PaintRow(row, rect, selected: true, editing: true);
+
+            var fieldRect = LayoutRow(row, rect, editing: true, out _, out _);
+            fieldRect.yMin += 1f;
+            fieldRect.yMax -= 1f;
+
+            GUI.SetNextControlName(NoteControlName);
+            _editingText = EditorGUI.TextField(fieldRect, _editingText);
+
+            if (e.type != EventType.Repaint)
+                return;
+
+            if (_focusNoteField)
+            {
+                EditorGUI.FocusTextInControl(NoteControlName);
+                _focusNoteField = false;
+                _noteFieldFocused = true;
+                Repaint();
+            }
+            else
+            {
+                _noteFieldFocused = GUI.GetNameOfFocusedControl() == NoteControlName;
+            }
+        }
+
+        private void BeginNoteEdit(RowKey key)
+        {
+            var row = FindRow(key);
+            if (row == null)
+                return;
+            if (IsEditingNote)
+                CommitNoteEdit(releaseFocus: false);
+
+            _selectedRow = key;
+            _editingRow = key;
+            _editingText = row.Note;
+            _focusNoteField = true;
+            Focus();
+            Repaint();
+        }
+
+        private void CommitNoteEdit(bool releaseFocus = false)
+        {
+            var key = _editingRow;
+            var text = _editingText;
+            EndNoteEdit(releaseFocus);
+            BookmarkStore.instance.SetNote(key.GroupKey, key.Id, text);
+        }
+
+        private void CancelNoteEdit(bool releaseFocus = false) => EndNoteEdit(releaseFocus);
+
+        // Focus is only released from inside this window's OnGUI: anywhere else, keyboardControl may belong
+        // to whichever view the user just moved to.
+        private void EndNoteEdit(bool releaseFocus)
+        {
+            _editingRow = default;
+            _editingText = null;
+            _focusNoteField = false;
+            _noteFieldFocused = false;
+
+            if (releaseFocus)
+            {
+                GUIUtility.keyboardControl = 0;
+                EditorGUIUtility.editingTextField = false;
+            }
+            Repaint();
+        }
+
+        private void EndNoteEditOnFocusLoss(Event e)
+        {
+            if (!IsEditingNote || _focusNoteField)
+                return;
+
+            // A click that no control used landed outside the field; a Repaint without focus means the
+            // keyboard moved elsewhere, such as the search field.
+            if (e.type == EventType.MouseDown)
+                CommitNoteEdit(releaseFocus: true);
+            else if (e.type == EventType.Repaint && !_noteFieldFocused)
+                CommitNoteEdit();
+        }
+
+        private void HandleNoteShortcut(Event e)
+        {
+            if (e.type != EventType.KeyDown || IsEditingNote || !_selectedRow.IsValid ||
+                EditorGUIUtility.editingTextField)
+                return;
+
+            // F2 renames in the Editor on Windows and Linux; macOS uses Return.
+            var isRenameKey = e.keyCode == KeyCode.F2 ||
+                (Application.platform == RuntimePlatform.OSXEditor &&
+                 (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter));
+            if (!isRenameKey || !IsRowVisible(_selectedRow))
+                return;
+
+            BeginNoteEdit(_selectedRow);
+            e.Use();
+        }
+
+        private BookmarkRow FindRow(RowKey key)
+        {
+            foreach (var group in _groups)
+            {
+                if (group.Key == key.GroupKey)
+                    return group.Rows.Find(row => row.Id == key.Id);
+            }
+            return null;
+        }
+
+        private bool IsRowVisible(RowKey key)
+        {
+            foreach (var visibleGroup in _visibleGroups)
+            {
+                if (visibleGroup.Expanded && visibleGroup.Group.Key == key.GroupKey)
+                    return visibleGroup.Rows.Exists(row => row.Id == key.Id);
+            }
+            return false;
         }
 
         // Every row drag is a real DragAndDrop with the target attached: dropped inside its group it
@@ -471,7 +679,7 @@ namespace Andeca.AssetBookmarks
             menu.DropDown(rect);
         }
 
-        private static void ShowRowMenu(BookmarkGroupView group, BookmarkRow row)
+        private void ShowRowMenu(BookmarkGroupView group, BookmarkRow row)
         {
             var menu = new GenericMenu();
 
@@ -486,6 +694,15 @@ namespace Andeca.AssetBookmarks
                 AddOpenSceneItems(menu, group.ScenePath, row.Id);
                 menu.AddSeparator(string.Empty);
             }
+
+            var key = new RowKey(group.Key, row.Id);
+            menu.AddItem(new GUIContent("Edit Note..."), false, () => BeginNoteEdit(key));
+            if (row.Note.Length > 0)
+            {
+                menu.AddItem(new GUIContent("Clear Note"), false,
+                    () => BookmarkStore.instance.SetNote(group.Key, row.Id, string.Empty));
+            }
+            menu.AddSeparator(string.Empty);
 
             menu.AddItem(new GUIContent("Remove"), false, () => BookmarkStore.instance.Remove(group.Key, row.Id));
             menu.AddItem(new GUIContent("Remove All in Group"), false,
@@ -599,6 +816,10 @@ namespace Andeca.AssetBookmarks
             public static Color MissingText => EditorGUIUtility.isProSkin
                 ? new Color(1f, 0.45f, 0.45f)
                 : new Color(0.70f, 0.10f, 0.10f);
+
+            public static Color NoteText => EditorGUIUtility.isProSkin
+                ? new Color(0.55f, 0.55f, 0.55f)
+                : new Color(0.42f, 0.42f, 0.42f);
 
             public static Color DropLine => new Color(0.27f, 0.55f, 0.95f);
         }

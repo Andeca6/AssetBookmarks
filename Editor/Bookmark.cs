@@ -14,6 +14,11 @@ namespace Andeca.AssetBookmarks
         // (deleted, or its scene isn't loaded).
         [SerializeField] private string _displayName;
 
+        // Optional user text for when the name alone doesn't tell targets apart, e.g. two "Flipper_L".
+        [SerializeField] private string _note;
+
+        public const int MaxNoteLength = 64;
+
         public Bookmark(string id, string displayName)
         {
             _id = id;
@@ -26,6 +31,13 @@ namespace Andeca.AssetBookmarks
         {
             get => _displayName;
             set => _displayName = value;
+        }
+
+        // Bookmarks saved before notes existed deserialize with a null note.
+        public string Note
+        {
+            get => _note ?? string.Empty;
+            set => _note = value;
         }
     }
 }

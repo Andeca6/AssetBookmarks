@@ -14,7 +14,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   context menu.
 - Click to select and ping, double-click to open.
 - Drag a bookmark into object fields, the Scene view or the Hierarchy, and drag within a group to reorder.
-- Name filter in the toolbar.
+- Short notes on bookmarks, shown next to the name and editable in place with F2 or the context menu.
+- Filter by name or note in the toolbar.
 - **Add to Bookmarks** in the Project and Hierarchy context menus, plus an unbound
   **Asset Bookmarks > Add Selection** shortcut.
 - Undo support for every change.

@@ -89,8 +89,10 @@ namespace Andeca.AssetBookmarks
                 var icon = AssetPreview.GetMiniTypeThumbnail(typeof(GameObject));
                 foreach (var bookmark in bookmarks)
                 {
-                    var content = new GUIContent(bookmark.DisplayName, "Scene not loaded. Right-click to open it.");
-                    rows.Add(new BookmarkRow(bookmark.Id, content, icon, null, BookmarkRowState.Unavailable));
+                    var content = CreateContent(bookmark, bookmark.DisplayName,
+                        "Scene not loaded. Right-click to open it.");
+                    rows.Add(new BookmarkRow(bookmark.Id, content, CreateNoteContent(bookmark, content), icon, null,
+                        BookmarkRowState.Unavailable));
                 }
             }
 
@@ -102,16 +104,30 @@ namespace Andeca.AssetBookmarks
         {
             var name = BookmarkLabels.GetDisplayName(target);
             store.UpdateDisplayName(bookmark, name);
-            var content = new GUIContent(name, BookmarkLabels.GetLocation(target));
-            return new BookmarkRow(bookmark.Id, content, BookmarkLabels.GetIcon(target), target,
-                BookmarkRowState.Available);
+            var content = CreateContent(bookmark, name, BookmarkLabels.GetLocation(target));
+            return new BookmarkRow(bookmark.Id, content, CreateNoteContent(bookmark, content),
+                BookmarkLabels.GetIcon(target), target, BookmarkRowState.Available);
         }
 
         private static BookmarkRow CreateMissingRow(Bookmark bookmark, string reason)
         {
             var name = string.IsNullOrEmpty(bookmark.DisplayName) ? "Unknown" : bookmark.DisplayName;
-            var content = new GUIContent($"{name} (missing)", $"{reason} Right-click to remove it.");
-            return new BookmarkRow(bookmark.Id, content, null, null, BookmarkRowState.Missing);
+            var content = CreateContent(bookmark, $"{name} (missing)", $"{reason} Right-click to remove it.");
+            return new BookmarkRow(bookmark.Id, content, CreateNoteContent(bookmark, content), null, null,
+                BookmarkRowState.Missing);
+        }
+
+        // The note leads the tooltip too, since a narrow window clips it in the row.
+        private static GUIContent CreateContent(Bookmark bookmark, string text, string tooltip)
+        {
+            var note = bookmark.Note;
+            return new GUIContent(text, note.Length == 0 ? tooltip : $"{note}\n{tooltip}");
+        }
+
+        private static GUIContent CreateNoteContent(Bookmark bookmark, GUIContent content)
+        {
+            var note = bookmark.Note;
+            return note.Length == 0 ? null : new GUIContent(note, content.tooltip);
         }
 
         // One batched lookup per group: the per-object variant searches loaded objects on every call.
