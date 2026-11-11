@@ -3,6 +3,8 @@
 An editor window for Unity that keeps the assets and scene objects you are working with one click away,
 however deep they sit in the Project window or the Hierarchy.
 
+<img width="800" height="600" alt="The Asset Bookmarks window in use" src="https://github.com/user-attachments/assets/5f7106c3-8cca-4d82-8523-8eb669d04bf3" />
+
 ## Features
 
 - **Bookmark anything:** assets, folders, sub-assets (such as a single sprite from a sprite sheet),
