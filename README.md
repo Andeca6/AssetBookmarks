@@ -72,6 +72,21 @@ identity for assets and scene objects, together with its last known name.
   keep working in Play Mode.
 - Bookmarks can't be moved between groups, and reordering is disabled while a filter is active.
 
+## AI usage
+
+This tool started as an editor window I wrote for my own projects. Turning it into a public 1.0
+release was done together with [Claude Code](https://www.anthropic.com/claude-code), Anthropic's
+AI coding assistant.
+
+- **My part:** the original tool and its concept, every design and feature decision, finding
+  usability problems through daily use (such as selecting on mouse up, so dragging a bookmark into
+  the Inspector doesn't change what it shows), manual testing in the Editor, and the release itself.
+- **Claude Code's part:** reviewing the original code, restructuring it into a package, implementing
+  the agreed fixes and features, automated checks against a running Editor, and drafting the
+  documentation.
+
+Every change was approved by me before it was committed.
+
 ## License
 
 [MIT](LICENSE.md) © Andeca
