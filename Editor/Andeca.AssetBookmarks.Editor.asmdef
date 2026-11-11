@@ -1,0 +1,16 @@
+{
+    "name": "Andeca.AssetBookmarks.Editor",
+    "rootNamespace": "Andeca.AssetBookmarks",
+    "references": [],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

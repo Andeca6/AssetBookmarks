@@ -1,0 +1,18 @@
+{
+  "name": "com.andeca.asset-bookmarks",
+  "version": "1.0.0",
+  "displayName": "Asset Bookmarks",
+  "description": "Editor window that keeps the assets and scene objects you are working with one click away. Bookmarks are grouped by scene and survive renames, moves and Editor restarts. Click to ping, double-click to open, drag a bookmark into any object field.",
+  "unity": "6000.0",
+  "license": "MIT",
+  "author": {
+    "name": "Andeca"
+  },
+  "keywords": [
+    "bookmarks",
+    "favorites",
+    "editor",
+    "productivity",
+    "workflow"
+  ]
+}
