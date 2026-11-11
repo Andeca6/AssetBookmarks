@@ -14,7 +14,8 @@ however deep they sit in the Project window or the Hierarchy.
   window or the Hierarchy. A double-click opens it: a scene loads, a prefab enters Prefab Mode, a script
   opens in your IDE, a GameObject is framed in the Scene view.
 - **Drag out as a reference:** drag a bookmark into any object field, the Scene view or the Hierarchy,
-  exactly as if you were dragging the original item.
+  exactly as if you were dragging the original item. The Inspector keeps showing the object you are
+  editing, so no lock is needed.
 - **Notes:** add a short note to any bookmark when its name isn't enough, such as two objects both
   called `Flipper_L`. Notes show next to the name and are included in the filter.
 - **Reorder** by dragging within a group, and **filter** by name or note from the toolbar.

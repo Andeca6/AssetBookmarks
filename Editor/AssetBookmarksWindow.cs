@@ -330,8 +330,6 @@ namespace Andeca.AssetBookmarks
                     _selectedRow = key;
                     if (e.clickCount == 2)
                         OpenTarget(row.Target);
-                    else
-                        SelectAndPing(row.Target);
                     _pressPosition = e.mousePosition;
                     GUIUtility.hotControl = controlId;
                     e.Use();
@@ -346,8 +344,12 @@ namespace Andeca.AssetBookmarks
                     e.Use();
                     break;
 
+                // Selecting on release, and only when no drag started, keeps the Inspector on the object that
+                // will receive a dragged reference instead of switching to the bookmark on mouse down.
                 case EventType.MouseUp when GUIUtility.hotControl == controlId:
                     GUIUtility.hotControl = 0;
+                    if (e.clickCount < 2)
+                        SelectAndPing(row.Target);
                     e.Use();
                     break;
 

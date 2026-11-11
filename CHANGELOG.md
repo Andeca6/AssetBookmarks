@@ -12,7 +12,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   GameObjects and components.
 - Scene objects grouped by scene, including scenes that aren't loaded, which can be opened from the
   context menu.
-- Click to select and ping, double-click to open.
+- Click to select and ping, double-click to open. Selection happens on release, so dragging a bookmark
+  keeps the Inspector on the object receiving the reference.
 - Drag a bookmark into object fields, the Scene view or the Hierarchy, and drag within a group to reorder.
 - Short notes on bookmarks, shown next to the name and editable in place with F2 or the context menu.
 - Filter by name or note in the toolbar.
